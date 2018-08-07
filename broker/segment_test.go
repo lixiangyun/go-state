@@ -101,8 +101,5 @@ func TestSegment04(t *testing.T) {
 
 	log.Println("size : ", fileinfo.Size())
 
-	err = os.Remove(filename)
-	if err != nil {
-		t.Error(err.Error())
-	}
+	os.Remove(filename)
 }

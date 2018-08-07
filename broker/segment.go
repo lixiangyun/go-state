@@ -12,7 +12,8 @@ import (
 )
 
 var (
-	SEGMENT_MAXSIZE = 1024 * 1024 * 64 // 当个文件最大 64MB
+	SEGMENT_MAXSIZE  = 1024 * 1024 * 64 // 当个文件最大 64MB
+	SEGMENT_SYNCSIZE = 1024 * 1024
 )
 
 var (
@@ -29,9 +30,13 @@ type LogRecord struct {
 type Segment struct {
 	sync.RWMutex
 
-	Begin    offset_t
-	End      offset_t
-	Records  map[offset_t]*LogRecord
+	IsFull  bool
+	Begin   offset_t
+	End     offset_t
+	Records map[offset_t]*LogRecord
+
+	SyncSize uint64
+	FileName string
 	FileSize uint64
 	FileFd   *os.File
 }
@@ -137,6 +142,7 @@ func NewSegment(filename string) (*Segment, error) {
 	seg.Begin = ^offset_t(0)
 	seg.End = 0
 	seg.Records = make(map[offset_t]*LogRecord, 1024)
+	seg.FileName = filename
 
 	fileinfo, err := os.Stat(filename)
 	if err != nil {
@@ -158,22 +164,22 @@ func NewSegment(filename string) (*Segment, error) {
 
 	seg.FileSize = uint64(fileinfo.Size())
 
+	if seg.FileSize >= uint64(SEGMENT_MAXSIZE) {
+		seg.IsFull = true
+	}
+
 	loglist, err := RecordRead(seg.FileFd)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, v := range loglist {
-		offset_id := offset_t(v.offset)
-		seg.Records[offset_id] = v
-		if seg.Begin > offset_id {
-			seg.Begin = offset_id
+	if len(loglist) > 0 {
+		for _, v := range loglist {
+			seg.Records[offset_t(v.offset)] = v
 		}
-		if seg.End < offset_id {
-			seg.End = offset_id
-		}
+		seg.Begin = offset_t(loglist[0].offset)
+		seg.End = offset_t(loglist[len(loglist)-1].offset)
 	}
-
 	seg.FileFd.Seek(int64(seg.FileSize), 0)
 
 	return seg, nil
@@ -183,7 +189,7 @@ func (s *Segment) Write(id offset_t, msg []byte) error {
 	s.Lock()
 	defer s.Unlock()
 
-	if s.FileSize >= uint64(SEGMENT_MAXSIZE) {
+	if s.IsFull {
 		return ErrIsFull
 	}
 
@@ -204,6 +210,16 @@ func (s *Segment) Write(id offset_t, msg []byte) error {
 		}
 		s.Records[offset_t(rec.offset)] = rec
 		s.FileSize += (rec.size + 24)
+		s.SyncSize += (rec.size + 24)
+
+		if s.SyncSize >= uint64(SEGMENT_SYNCSIZE) {
+			s.FileFd.Sync()
+			s.SyncSize = 0
+		}
+
+		if s.FileSize >= uint64(SEGMENT_MAXSIZE) {
+			s.IsFull = true
+		}
 	}
 
 	return err
@@ -222,10 +238,40 @@ func (s *Segment) Read(id offset_t) ([]byte, error) {
 }
 
 func (s *Segment) Close() {
+	s.Lock()
+	defer s.Unlock()
+
+	s.FileFd.Close()
+	s.Records = nil
+}
+
+func (s *Segment) Delete() error {
 
 	s.Lock()
 	defer s.Unlock()
 
 	s.FileFd.Close()
 	s.Records = nil
+
+	err := os.Remove(s.FileName)
+	return err
+}
+
+type SegList []*Segment
+
+func (list SegList) Len() int {
+	return len(list)
+}
+
+func (list SegList) Less(i, j int) bool {
+	if list[i].End < list[j].Begin {
+		return true
+	}
+	return false
+}
+
+func (list SegList) Swap(i, j int) {
+	tmp := list[i]
+	list[i] = list[j]
+	list[j] = tmp
 }
