@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
 )
 
 type P_STATUS string
@@ -81,10 +82,15 @@ func NewPartition(id string) (*Partition, error) {
 		if v.IsDir() {
 			continue
 		}
-		filename := fmt.Sprintf("%s/%s", part.DirPath, v.Name())
-		seg, err := NewSegment(filename)
+
+		offset, err := strconv.Atoi(v.Name())
 		if err != nil {
 			log.Println(err.Error())
+			continue
+		}
+
+		seg := NewSegment(part.DirPath, offset_t(offset))
+		if seg == nil {
 			continue
 		}
 		seglist = append(seglist, seg)
@@ -96,20 +102,19 @@ func NewPartition(id string) (*Partition, error) {
 			part.SegMap[idx] = v
 		}
 		part.SegIdx = len(seglist) - 1
-		part.Offset = part.SegMap[part.SegIdx].End
+		part.Offset = part.SegMap[part.SegIdx].End()
 		part.SegNum = len(seglist)
 	} else {
-		part.NewSegment()
+		part.NewSegment(0)
 	}
 
 	return part, nil
 }
 
-func (p *Partition) NewSegment() {
-	filename := fmt.Sprintf("%s/%s.dat", p.DirPath, TimeStamp())
-	seg, err := NewSegment(filename)
-	if err != nil {
-		log.Fatalln(err.Error())
+func (p *Partition) NewSegment(id offset_t) {
+	seg := NewSegment(p.DirPath, id)
+	if seg != nil {
+		log.Fatalln("new segmant failed!")
 	}
 	p.SegMap[p.SegNum] = seg
 	p.SegIdx = p.SegNum
@@ -117,19 +122,6 @@ func (p *Partition) NewSegment() {
 }
 
 func (p *Partition) Write(id offset_t, message []byte) error {
-	if (p.Offset + 1) != id {
-		return errors.New("id is less then offset!")
-	}
-	for {
-		seg := p.SegMap[p.SegIdx]
-		if seg.IsFull {
-			p.NewSegment()
-			continue
-		}
-		seg.Write(id, message)
-		break
-	}
-	p.Offset = id
 
 	return nil
 }

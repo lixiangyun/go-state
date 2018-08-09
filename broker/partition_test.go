@@ -22,7 +22,7 @@ func TestPartition01(t *testing.T) {
 	offset := part.Offset
 	log.Println("offset : ", offset)
 
-	for i := 1; i < 3000000; i++ {
+	for i := 1; i < 1000000; i++ {
 		part.Write(offset_t(i)+offset, []byte(fmt.Sprintf("helloworld%d_%s", i, UUID(UUID32))))
 	}
 
