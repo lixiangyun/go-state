@@ -1,5 +1,6 @@
 package broker
 
 type Topic struct {
-	Name string `json:"Name"`
+	Name        string `json:"name"`
+	PartitionID string `json:"partitionid"`
 }

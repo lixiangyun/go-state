@@ -2,7 +2,6 @@ package broker
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
@@ -14,7 +13,7 @@ type EtcdConn struct {
 	cancel context.CancelFunc
 }
 
-func NewEtcdClient(endpoints []string, timeout time.Duration) *EtcdConn {
+func NewEtcdClient(endpoints []string, timeout time.Duration) (*EtcdConn, error) {
 	var err error
 	etcdconn := new(EtcdConn)
 
@@ -24,11 +23,14 @@ func NewEtcdClient(endpoints []string, timeout time.Duration) *EtcdConn {
 
 	etcdconn.client, err = clientv3.New(etcdconn.config)
 	if err != nil {
-		log.Println(err.Error())
-		return nil
+		return nil, err
 	}
 
-	return etcdconn
+	return etcdconn, nil
+}
+
+func (e *EtcdConn) Call() *clientv3.Client {
+	return e.client
 }
 
 func (e *EtcdConn) Close() {

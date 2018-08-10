@@ -10,19 +10,21 @@ import (
 	"sync"
 )
 
-type P_STATUS string
+type PART_S int
 
-var (
-	P_FREE P_STATUS = "free"
-	P_USED P_STATUS = "used"
+const (
+	_ PART_S = iota
+	PART_S_FREE
+	PART_S_PRIMARY
+	PART_S_FOLLOW
 )
 
 type Partition struct {
 	sync.RWMutex
 
-	ID     string   `json:"id"`
-	Topic  string   `json:"topic"`
-	Status P_STATUS `json:"status"`
+	ID     string `json:"id"`
+	Topic  string `json:"topic"`
+	Status PART_S `json:"status"`
 
 	DirPath string
 	Offset  uint64
@@ -104,11 +106,11 @@ func CovPath(path string) []*Segment {
 	return seglist
 }
 
-func NewPartition(id string) *Partition {
+func NewPartition(id string, status PART_S) *Partition {
 
 	part := new(Partition)
 	part.ID = id
-	part.Status = P_FREE
+	part.Status = status
 	part.DirPath = WorkPath(id)
 	part.seglist = NewSegList()
 
@@ -162,4 +164,24 @@ func (part *Partition) Read(id uint64) []byte {
 	}
 
 	return seg.Read(id)
+}
+
+func (part *Partition) UpdateStatus(status PART_S) {
+	part.Lock()
+	defer part.Unlock()
+
+	part.Status = status
+}
+
+func (part *Partition) Reset() {
+	part.Lock()
+	defer part.Unlock()
+
+	// 重置所有内容
+	if part.Offset != 0 {
+		part.Offset = 0
+		part.seglist.Destory()
+		seg := NewSegment(part.DirPath, 0)
+		part.seglist.Add(seg)
+	}
 }

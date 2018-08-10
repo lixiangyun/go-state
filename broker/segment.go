@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	SEGMENT_MAXSIZE  = 1024 * 1024 * 64 // 当个文件最大 64MB
+	SEGMENT_MAXSIZE  = 1024 * 1024 * 4 // 当个文件最大4MB
 	SEGMENT_SYNCSIZE = 4 * 1024
 	SEGMENT_SYNCCNT  = 100
 )
@@ -390,8 +390,6 @@ func NewSegment(path string, start uint64) *Segment {
 		seg.recnum = seg.idx.Max()
 	}
 
-	log.Println("new segment success!", seg)
-
 	return seg
 }
 
@@ -507,6 +505,13 @@ func (list *SegList) Del() {
 	seg := list.array[0]
 	seg.Delete()
 	list.array = list.array[1:]
+}
+
+func (list *SegList) Destory() {
+	for _, v := range list.array {
+		v.Delete()
+	}
+	list.array = make([]*Segment, 0)
 }
 
 func (list *SegList) Find(id uint64) *Segment {
