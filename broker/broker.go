@@ -10,11 +10,6 @@ import (
 	"github.com/coreos/etcd/clientv3"
 )
 
-const (
-	defaultTTL     = 5
-	defaultTimeout = 3 * time.Second
-)
-
 var gEtcd *EtcdConn
 
 func BrokerCall() *clientv3.Client {
@@ -25,22 +20,20 @@ func keepalive(ttl int, lease clientv3.LeaseID) {
 	var trycnt int
 
 	for {
+		<-time.After(time.Duration(ttl) * time.Second / defaultTimes)
 
-		<-time.After(time.Duration(ttl) * time.Second / 3)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 		_, err := BrokerCall().KeepAliveOnce(ctx, lease)
 		cancel()
 
 		if err != nil {
 			trycnt++
-			if trycnt > 3 {
+			if trycnt > defaultTryTimes {
 				log.Fatalln("broker heartbeat fail!")
 			}
 			continue
 		}
 		trycnt = 0
-
 	}
 }
 
@@ -73,7 +66,7 @@ func BrokerRegister(name string, endpoint string) error {
 
 	if resp.Succeeded {
 		go keepalive(defaultTTL, rasp.ID)
-		log.Println("broker" + name + "register success!")
+		log.Println("broker " + name + " register success!")
 		return nil
 	}
 
@@ -87,5 +80,12 @@ func BrokerStart(name string, endpoint string, etcds []string) error {
 	}
 	gEtcd = etcdconn
 
-	return BrokerRegister(name, endpoint)
+	err = BrokerRegister(name, endpoint)
+	if err != nil {
+		return err
+	}
+
+	for {
+		time.Sleep(1 * time.Second)
+	}
 }

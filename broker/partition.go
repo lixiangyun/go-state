@@ -22,10 +22,9 @@ const (
 type Partition struct {
 	sync.RWMutex
 
-	ID     string `json:"id"`
-	Topic  string `json:"topic"`
-	Status PART_S `json:"status"`
-
+	ID      string
+	Topic   string
+	Status  PART_S
 	DirPath string
 	Offset  uint64
 
