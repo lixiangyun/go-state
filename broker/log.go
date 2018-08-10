@@ -13,13 +13,13 @@ type LogManager struct {
 	Partition string
 	FileNum   uint64
 	MaxSize   uint64
-	Offset    offset_t
+	Offset    uint64
 	File      *os.File
 }
 
 type LogApi interface {
-	Write(offset offset_t, body []byte) error
-	Read(offset offset_t) ([]byte, error)
+	Write(offset uint64, body []byte) error
+	Read(offset uint64) ([]byte, error)
 }
 
 func NewLogManager(partition string) *LogManager {

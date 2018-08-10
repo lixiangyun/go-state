@@ -13,13 +13,28 @@ func TestSegment01(t *testing.T) {
 		t.Error("new segmant failed!")
 		return
 	}
+
 	log.Println("seg : ", seg.Begin(), seg.End())
 
 	for i := 0; i < 1000; i++ {
-		seg.Write(offset_t(i), []byte("helloworld!"))
+		err := seg.Write(uint64(i), []byte("helloworld!"))
+		if err != nil {
+			log.Println(err.Error())
+			break
+		}
 	}
 
-	seg.Delete()
+	for i := 0; i < 1000; i++ {
+		body := seg.Read(uint64(i))
+		if 0 != bytes.Compare(body, []byte("helloworld!")) {
+			t.Error(body)
+			break
+		}
+	}
+
+	log.Println("seg : ", seg.Begin(), seg.End())
+
+	seg.Close()
 }
 
 func TestSegment02(t *testing.T) {
@@ -33,10 +48,12 @@ func TestSegment02(t *testing.T) {
 	log.Println("seg : ", seg.Begin(), seg.End())
 
 	for i := 1000; i < 2000; i++ {
-		seg.Write(offset_t(i), []byte("helloworld!"))
+		seg.Write(uint64(i), []byte("helloworld!"))
 	}
 
-	seg.Delete()
+	log.Println("seg : ", seg.Begin(), seg.End())
+
+	seg.Close()
 }
 
 func TestSegment03(t *testing.T) {
@@ -50,7 +67,7 @@ func TestSegment03(t *testing.T) {
 	log.Println("seg : ", seg.Begin(), seg.End())
 
 	for i := 0; i < 2000; i++ {
-		message := seg.Read(offset_t(i))
+		message := seg.Read(uint64(i))
 		if message == nil {
 			t.Error("read message failed!")
 			break
@@ -74,8 +91,18 @@ func TestSegment04(t *testing.T) {
 
 	log.Println("seg : ", seg.Begin(), seg.End())
 
+	body := make([]byte, 1024)
+
+	for i := 0; i < len(body); i++ {
+		body[i] = byte(i)
+	}
+
 	for i := 0; ; i++ {
-		seg.Write(offset_t(i), []byte("abcdefasdlinfhlkxcnlvks;df09&*(*@)$*HCLJB"))
+		err := seg.Write(uint64(i), body)
+		if err != nil {
+			log.Println(err.Error())
+			break
+		}
 	}
 
 	log.Println("seg : ", seg.Begin(), seg.End())

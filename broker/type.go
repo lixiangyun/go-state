@@ -1,6 +1,8 @@
 package broker
 
-type offset_t uint64
+const (
+	INVALID_OFFSET = ^uint64(0)
+)
 
 type Endpoint struct {
 	Address string `json:"address"`

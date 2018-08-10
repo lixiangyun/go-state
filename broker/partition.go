@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
 	"strconv"
+	"strings"
+	"sync"
 )
 
 type P_STATUS string
@@ -17,16 +18,16 @@ var (
 )
 
 type Partition struct {
+	sync.RWMutex
+
 	ID     string   `json:"id"`
 	Topic  string   `json:"topic"`
 	Status P_STATUS `json:"status"`
 
 	DirPath string
+	Offset  uint64
 
-	Offset offset_t
-	SegIdx int
-	SegNum int
-	SegMap map[int]*Segment
+	seglist *SegList
 }
 
 func MkDir(file string) error {
@@ -47,86 +48,118 @@ func MkDir(file string) error {
 	return nil
 }
 
-func NewPartition(id string) (*Partition, error) {
+func WorkPath(id string) string {
+
 	err := MkDir(CLUSTER_NAME)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, err
+		log.Fatalln(err.Error())
 	}
 	path := fmt.Sprintf("./%s/%s", CLUSTER_NAME, id)
 	err = MkDir(path)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, err
+		log.Fatalln(err.Error())
 	}
 
-	part := new(Partition)
-	part.ID = id
-	part.Status = P_FREE
-	part.DirPath = path
-	part.SegNum = 0
-	part.SegMap = make(map[int]*Segment, 0)
+	return path
+}
 
-	dir, err := os.Open(part.DirPath)
+func CovPath(path string) []*Segment {
+
+	dir, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
 	fileinfo, err := dir.Readdir(0)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 
-	seglist := make(SegList, 0)
+	seglist := make([]*Segment, 0)
+
 	for _, v := range fileinfo {
-		if v.IsDir() {
+
+		filename := v.Name()
+
+		if v.IsDir() || -1 == strings.Index(filename, ".idx") {
 			continue
 		}
 
-		offset, err := strconv.Atoi(v.Name())
+		idx := strings.Index(filename, ".idx")
+
+		offset, err := strconv.Atoi(filename[:idx])
 		if err != nil {
 			log.Println(err.Error())
 			continue
 		}
 
-		seg := NewSegment(part.DirPath, offset_t(offset))
+		seg := NewSegment(path, uint64(offset))
 		if seg == nil {
 			continue
 		}
+
 		seglist = append(seglist, seg)
 	}
 
-	if len(seglist) > 0 {
-		sort.Sort(seglist)
-		for idx, v := range seglist {
-			part.SegMap[idx] = v
-		}
-		part.SegIdx = len(seglist) - 1
-		part.Offset = part.SegMap[part.SegIdx].End()
-		part.SegNum = len(seglist)
+	return seglist
+}
+
+func NewPartition(id string) *Partition {
+
+	part := new(Partition)
+	part.ID = id
+	part.Status = P_FREE
+	part.DirPath = WorkPath(id)
+	part.seglist = NewSegList()
+
+	addseglist := CovPath(part.DirPath)
+	if len(addseglist) > 0 {
+		part.seglist.Add(addseglist...)
 	} else {
-		part.NewSegment(0)
+		seg := NewSegment(part.DirPath, 0)
+		part.seglist.Add(seg)
+	}
+	part.Offset = part.seglist.Last().End()
+
+	return part
+}
+
+func (part *Partition) CurOffset() uint64 {
+	return part.Offset
+}
+
+func (part *Partition) Write(message []byte) uint64 {
+
+	part.Lock()
+	defer part.Unlock()
+
+	part.Offset++
+
+	for {
+		err := part.seglist.Last().Write(part.Offset, message)
+		if err == nil {
+			break
+		}
+		if err == ErrIsFull {
+			seg := NewSegment(part.DirPath, part.Offset)
+			part.seglist.Add(seg)
+		} else {
+			log.Fatalln(err.Error())
+		}
 	}
 
-	return part, nil
+	return part.Offset
 }
 
-func (p *Partition) NewSegment(id offset_t) {
-	seg := NewSegment(p.DirPath, id)
-	if seg != nil {
-		log.Fatalln("new segmant failed!")
+func (part *Partition) Read(id uint64) []byte {
+
+	part.RLock()
+	defer part.RUnlock()
+
+	seg := part.seglist.Find(id)
+	if seg == nil {
+		return nil
 	}
-	p.SegMap[p.SegNum] = seg
-	p.SegIdx = p.SegNum
-	p.SegNum++
-}
 
-func (p *Partition) Write(id offset_t, message []byte) error {
-
-	return nil
-}
-
-func (p *Partition) Read(id offset_t) []byte {
-
-	return nil
+	return seg.Read(id)
 }
