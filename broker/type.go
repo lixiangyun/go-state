@@ -1,8 +1,8 @@
 package broker
 
-const CLUSTER_NAME = "default"
+var CLUSTER_NAME = "default"
 
-const KEY_COMMON = "/" + CLUSTER_NAME + "/common"
+var KEY_COMMON = "/" + CLUSTER_NAME + "/common"
 
 type DataCommon struct {
 	PartitionNum int `json:"partitions"`
@@ -14,7 +14,16 @@ type PartReplicas struct {
 	Role   PART_S `json:"status"`
 }
 
-const KEY_PARTITION = "/" + CLUSTER_NAME + "/partition/"
+type PART_S int /* 分区状态类型 */
+
+const (
+	_              PART_S = iota
+	PART_S_FREE           /* 分区空闲状态 */
+	PART_S_PRIMARY        /* 分区主状态 */
+	PART_S_FOLLOW         /* 分区从状态 */
+)
+
+var KEY_PARTITION = "/" + CLUSTER_NAME + "/partition/"
 
 type DataPartition struct {
 	PartitionID string         `json:"partitionid"`
@@ -22,14 +31,14 @@ type DataPartition struct {
 	Replicas    []PartReplicas `json:"replicas"`
 }
 
-const KEY_BROKER = "/" + CLUSTER_NAME + "/broker/"
+var KEY_BROKER = "/" + CLUSTER_NAME + "/broker/"
 
 type DataBroker struct {
 	Broker string `json:"broker"`
 	Addr   string `json:"endpoint"`
 }
 
-const KEY_TOPIC = "/" + CLUSTER_NAME + "/topic/"
+var KEY_TOPIC = "/" + CLUSTER_NAME + "/topic/"
 
 type DataTopic struct {
 	Topic       string `json:"topic"`
@@ -41,7 +50,7 @@ type DataSubscribe struct {
 	Offset uint64 `json:"offset"`
 }
 
-const KEY_CONSUMER = "/" + CLUSTER_NAME + "/consumer/"
+var KEY_CONSUMER = "/" + CLUSTER_NAME + "/consumer/"
 
 type DataConsumer struct {
 	ConsumerID string          `json:"consumerid"`
@@ -51,3 +60,7 @@ type DataConsumer struct {
 const (
 	INVALID_OFFSET = ^uint64(0)
 )
+
+func BrokerClusterNameSet(name string) {
+	CLUSTER_NAME = name
+}

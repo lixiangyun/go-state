@@ -66,15 +66,15 @@ func BrokerRegister(name string, endpoint string) error {
 
 	if resp.Succeeded {
 		go keepalive(defaultTTL, rasp.ID)
-		log.Println("broker " + name + " register success!")
+		log.Println("broker [" + name + "] register success!")
 		return nil
 	}
 
-	return errors.New("register failed!")
+	return errors.New("register [" + name + "] failed!")
 }
 
 func BrokerStart(name string, endpoint string, etcds []string) error {
-	etcdconn, err := NewEtcdClient(etcds, 5*time.Second)
+	etcdconn, err := NewEtcdClient(etcds)
 	if err != nil {
 		return err
 	}

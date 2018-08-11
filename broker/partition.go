@@ -10,15 +10,6 @@ import (
 	"sync"
 )
 
-type PART_S int
-
-const (
-	_ PART_S = iota
-	PART_S_FREE
-	PART_S_PRIMARY
-	PART_S_FOLLOW
-)
-
 type Partition struct {
 	sync.RWMutex
 

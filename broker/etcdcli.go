@@ -11,6 +11,10 @@ import (
 	mvcc "github.com/coreos/etcd/mvcc/mvccpb"
 )
 
+var (
+	ErrIsNone = errors.New("have not found key!")
+)
+
 const (
 	defaultTTL      = 5
 	defaultTimeout  = 3 * time.Second
@@ -45,11 +49,11 @@ type EtcdConn struct {
 	cancel context.CancelFunc
 }
 
-func NewEtcdClient(endpoints []string, timeout time.Duration) (*EtcdConn, error) {
+func NewEtcdClient(endpoints []string) (*EtcdConn, error) {
 	var err error
 	etcdconn := new(EtcdConn)
 
-	etcdconn.config.DialTimeout = timeout
+	etcdconn.config.DialTimeout = defaultTimeout
 	etcdconn.config.Endpoints = endpoints
 	etcdconn.config.Context, etcdconn.cancel = context.WithCancel(context.Background())
 
@@ -106,13 +110,13 @@ func (e *EtcdConn) Get(key string) ([]byte, error) {
 	}
 
 	if len(resp.Kvs) == 0 {
-		return nil, errors.New("have not found key/value!")
+		return nil, ErrIsNone
 	}
 
 	return resp.Kvs[0].Value, nil
 }
 
-func (e *EtcdConn) GetWithChild(key string) ([]KeyValue, error) {
+func (e *EtcdConn) GetAll(key string) ([]KeyValue, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	resp, err := e.client.Get(ctx, key, clientv3.WithPrefix())
@@ -122,7 +126,7 @@ func (e *EtcdConn) GetWithChild(key string) ([]KeyValue, error) {
 	}
 
 	if len(resp.Kvs) == 0 {
-		return nil, errors.New("have not found key/value!")
+		return nil, ErrIsNone
 	}
 
 	var kvs []KeyValue
@@ -166,7 +170,7 @@ func (e *EtcdConn) Watch(ctx context.Context, key string) <-chan KvWatchRsq {
 					case mvcc.DELETE:
 						{
 							if event.PrevKv == nil {
-								log.Println("prev kv is not exist!")
+								log.Println("prev kv is not exist!", key)
 								continue
 							}
 
