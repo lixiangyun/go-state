@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
@@ -73,6 +74,102 @@ func BrokerRegister(name string, endpoint string) error {
 	return errors.New("register [" + name + "] failed!")
 }
 
+type PartitionManager struct {
+	sync.RWMutex
+	BrokerName   string
+	PartitionCfg map[string]DataPartition
+	PartitionSeg map[string]*Partition
+	watchctx     context.Context
+	cancel       context.CancelFunc
+}
+
+var gPartitionMng PartitionManager
+
+func init() {
+	gPartitionMng.PartitionCfg = make(map[string]DataPartition, 0)
+	gPartitionMng.PartitionSeg = make(map[string]*Partition, 0)
+	gPartitionMng.watchctx, gPartitionMng.cancel = context.WithCancel(context.Background())
+}
+
+func (p *PartitionManager) Add(partition DataPartition) {
+	p.Lock()
+	defer p.Unlock()
+
+	_, b := p.PartitionCfg[partition.PartitionID]
+	if b == false {
+		log.Println("partition configure add: ", partition)
+		p.PartitionCfg[partition.PartitionID] = partition
+	} else {
+		log.Println("partition configure update: ", partition)
+		p.PartitionCfg[partition.PartitionID] = partition
+	}
+
+	for _, one := range p.PartitionCfg {
+
+		_, exist := p.PartitionSeg[one.PartitionID]
+		if exist {
+			continue
+		}
+
+		for _, rep := range one.Replicas {
+			if rep.Broker == p.BrokerName {
+				partitionSeg := NewPartition(one.PartitionID, rep.Role)
+				if partitionSeg != nil {
+					log.Println("add partition segment success!", partitionSeg)
+					p.PartitionSeg[one.PartitionID] = partitionSeg
+				}
+			}
+		}
+	}
+}
+
+func (p *PartitionManager) Put(partitionId string, message []byte) (uint64, error) {
+	p.Lock()
+	defer p.Unlock()
+
+	partseg, exist := p.PartitionSeg[partitionId]
+	if exist == false {
+		log.Println("partition is not exist!", partitionId)
+		return INVALID_OFFSET, errors.New("partition is not exist!")
+	}
+
+	return partseg.Write(message), nil
+}
+
+func (p *PartitionManager) Get(partitionId string, offset uint64) ([]byte, error) {
+	p.Lock()
+	defer p.Unlock()
+
+	partseg, exist := p.PartitionSeg[partitionId]
+	if exist == false {
+		log.Println("partition is not exist!", partitionId)
+		return nil, errors.New("partition is not exist!")
+	}
+
+	return partseg.Read(offset), nil
+}
+
+func BrokerPartitionInit(etcdconn *EtcdConn) {
+
+	partitionChan := BrokerPartitionWatch(gPartitionMng.watchctx, etcdconn)
+
+	go func() {
+		for {
+			partition := <-partitionChan
+			gPartitionMng.Add(partition)
+		}
+	}()
+
+	partitionlist := BrokerPartitionGet(etcdconn)
+	if len(partitionlist) == 0 {
+		return
+	}
+
+	for _, v := range partitionlist {
+		gPartitionMng.Add(v)
+	}
+}
+
 func BrokerStart(name string, endpoint string, etcds []string) error {
 	etcdconn, err := NewEtcdClient(etcds)
 	if err != nil {
@@ -80,10 +177,14 @@ func BrokerStart(name string, endpoint string, etcds []string) error {
 	}
 	gEtcd = etcdconn
 
+	gPartitionMng.BrokerName = name
+
 	err = BrokerRegister(name, endpoint)
 	if err != nil {
 		return err
 	}
+
+	BrokerPartitionInit(etcdconn)
 
 	for {
 		time.Sleep(1 * time.Second)

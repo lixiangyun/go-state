@@ -30,6 +30,7 @@ const (
 	EVENT_UPDATE
 	EVENT_DELETE
 	EVENT_EXPIRE
+	EVENT_EXIT
 )
 
 type KeyValue struct {
@@ -203,6 +204,7 @@ func (e *EtcdConn) Watch(ctx context.Context, key string) <-chan KvWatchRsq {
 				}
 			}
 		case <-ctx.Done():
+			watchrsq <- KvWatchRsq{Act: EVENT_EXIT}
 			return
 		}
 	}()

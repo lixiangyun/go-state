@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 )
@@ -131,4 +132,44 @@ func BrokerPartitionGet(etcdconn *EtcdConn) []DataPartition {
 	}
 
 	return partitionlist
+}
+
+func BrokerPartitionWatch(ctx context.Context, etcdconn *EtcdConn) <-chan DataPartition {
+
+	partitionChan := make(chan DataPartition, 10)
+
+	kvlist := etcdconn.Watch(ctx, KEY_PARTITION)
+
+	go func() {
+
+		for {
+			event := <-kvlist
+
+			switch event.Act {
+			case EVENT_ADD:
+				fallthrough
+			case EVENT_UPDATE:
+				{
+					var partition DataPartition
+					err := json.Unmarshal([]byte(event.Value), &partition)
+					if err != nil {
+						log.Println(err.Error())
+						continue
+					}
+					partitionChan <- partition
+				}
+			case EVENT_EXIT:
+				{
+					log.Fatalln("watch partition failed!")
+					return
+				}
+			default:
+				{
+					log.Println("watch invail partition ", event)
+				}
+			}
+		}
+	}()
+
+	return partitionChan
 }
