@@ -17,16 +17,16 @@ type PartReplicas struct {
 type PART_S int /* 分区状态类型 */
 
 const (
-	_              PART_S = iota
-	PART_S_FREE           /* 分区空闲状态 */
-	PART_S_PRIMARY        /* 分区主状态 */
-	PART_S_FOLLOW         /* 分区从状态 */
+	PART_S_FREE    PART_S = iota /* 分区空闲状态 */
+	PART_S_PRIMARY               /* 分区主状态 */
+	PART_S_FOLLOW                /* 分区从状态 */
 )
 
 var KEY_PARTITION = "/" + CLUSTER_NAME + "/partition/"
 
 type DataPartition struct {
 	PartitionID string         `json:"partitionid"`
+	Status      PART_S         `json:"status"`
 	Topic       string         `json:"topic"`
 	Replicas    []PartReplicas `json:"replicas"`
 }

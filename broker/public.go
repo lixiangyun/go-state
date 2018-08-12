@@ -84,6 +84,30 @@ func BrokerTopicGet(etcdconn *EtcdConn) []DataTopic {
 	return topiclist
 }
 
+func BrokerTopicPut(etcdconn *EtcdConn, topic DataTopic) error {
+
+	value, err := json.Marshal(topic)
+	if err != nil {
+		return err
+	}
+
+	key := KEY_TOPIC + topic.Topic
+
+	return etcdconn.Put(key, value)
+}
+
+func BrokerPartitionPut(etcdconn *EtcdConn, partition DataPartition) error {
+
+	value, err := json.Marshal(partition)
+	if err != nil {
+		return err
+	}
+
+	key := KEY_PARTITION + partition.PartitionID
+
+	return etcdconn.Put(key, value)
+}
+
 func BrokerPartitionGet(etcdconn *EtcdConn) []DataPartition {
 
 	partitionlist := make([]DataPartition, 0)
